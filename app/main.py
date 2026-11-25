@@ -4,11 +4,18 @@ import threading
 
 def handle_client(connection):
     while True:
-        data = connection.recv(1024)  # read request, ignore content
+        data = connection.recv(1024)
         if not data:  # client closed the connection
             connection.close()
             break
-        connection.sendall(b"+PONG\r\n")
+        # *N\r\n$len\r\nitem\r\n... -> items are every 2nd part after the array header
+        items = data.split(b"\r\n")[2::2]
+        command = items[0].upper()
+        if command == b"PING":
+            connection.sendall(b"+PONG\r\n")
+        elif command == b"ECHO":
+            arg = items[1]
+            connection.sendall(b"$%d\r\n%s\r\n" % (len(arg), arg))
 
 
 def main():
