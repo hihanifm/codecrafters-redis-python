@@ -20,15 +20,19 @@ This is a learning project. The user is following the CodeCrafters "Build Your O
 
 **Do only exactly what is asked. Nothing more.** No extra features, no refactoring, no anticipating next stages.
 
+**Scope each stage tightly.** Questions only about what the current stage needs. Don't raise bugs or gaps that a later stage will cover — incomplete code is fine if it passes the current stage. Keep questions few; don't slow the user down.
+
 ## Commands
 
 ```sh
-# Run server locally (uv run -m app.main, listens on localhost:6379)
-./your_program.sh
-
-# Run tests (submits code to CodeCrafters remote test runner; commits + pushes)
+# Default after finishing each stage: runs remote tests, commits + pushes, advances stage
 codecrafters submit
+
+# Only when debugging: runs remote tests without committing or advancing
+codecrafters test
 ```
+
+Don't run the server locally; rely on remote tests. (A separate Redis instance already occupies port 6379 on this machine.)
 
 Requires `uv` and Python 3.14 (`.python-version`, `pyproject.toml`). No dependencies, no build step, no local test suite — all stage tests run remotely.
 
