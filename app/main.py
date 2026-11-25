@@ -48,6 +48,15 @@ def handle_client(connection):
                 connection.sendall(b"$-1\r\n")
             else:
                 connection.sendall(b"$%d\r\n%s\r\n" % (len(value), value))
+        elif command == b"RPUSH":
+            with store_lock:  # get-or-create + append must be one step
+                entry = store.get(items[1])
+                if entry is None:
+                    entry = ([], 0)  # new list, no expiry
+                    store[items[1]] = entry
+                entry[0].append(items[2])
+                length = len(entry[0])
+            connection.sendall(b":%d\r\n" % length)
         else:
             connection.sendall(b"-ERR unknown command '%s'\r\n" % items[0])
 
