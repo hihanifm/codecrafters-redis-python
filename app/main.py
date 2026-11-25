@@ -1,7 +1,13 @@
 import socket  # noqa: F401
 import threading
+import time
 
 store = {}  # shared by all client threads
+store_lock = threading.Lock()  # guards every access to store
+
+
+def now_ms():
+    return time.monotonic() * 1000
 
 
 def handle_client(connection):
@@ -19,10 +25,25 @@ def handle_client(connection):
             arg = items[1]
             connection.sendall(b"$%d\r\n%s\r\n" % (len(arg), arg))
         elif command == b"SET":
-            store[items[1]] = items[2]
+            deadline = 0  # 0 = no expiry
+            if len(items) > 4 and items[3].upper() == b"PX":
+                px = int(items[4])
+                if px <= 0:
+                    connection.sendall(b"-ERR invalid expire time in 'set' command\r\n")
+                    continue
+                deadline = now_ms() + px
+            with store_lock:
+                store[items[1]] = (items[2], deadline)
             connection.sendall(b"+OK\r\n")
         elif command == b"GET":
-            value = store.get(items[1])
+            value = None
+            with store_lock:  # check + delete must be one step
+                entry = store.get(items[1])
+                if entry is not None:
+                    value, deadline = entry
+                    if deadline != 0 and now_ms() > deadline:  # expired: lazy delete
+                        del store[items[1]]
+                        value = None
             if value is None:
                 connection.sendall(b"$-1\r\n")
             else:
