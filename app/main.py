@@ -1,6 +1,8 @@
 import socket  # noqa: F401
 import threading
 
+store = {}  # shared by all client threads
+
 
 def handle_client(connection):
     while True:
@@ -16,6 +18,17 @@ def handle_client(connection):
         elif command == b"ECHO":
             arg = items[1]
             connection.sendall(b"$%d\r\n%s\r\n" % (len(arg), arg))
+        elif command == b"SET":
+            store[items[1]] = items[2]
+            connection.sendall(b"+OK\r\n")
+        elif command == b"GET":
+            value = store.get(items[1])
+            if value is None:
+                connection.sendall(b"$-1\r\n")
+            else:
+                connection.sendall(b"$%d\r\n%s\r\n" % (len(value), value))
+        else:
+            connection.sendall(b"-ERR unknown command '%s'\r\n" % items[0])
 
 
 def main():
