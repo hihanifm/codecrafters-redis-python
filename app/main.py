@@ -1,4 +1,14 @@
 import socket  # noqa: F401
+import threading
+
+
+def handle_client(connection):
+    while True:
+        data = connection.recv(1024)  # read request, ignore content
+        if not data:  # client closed the connection
+            connection.close()
+            break
+        connection.sendall(b"+PONG\r\n")
 
 
 def main():
@@ -11,9 +21,7 @@ def main():
 
     while True:
         connection, _ = server_socket.accept()  # wait for client
-        while True:
-            connection.recv(1024)  # read request, ignore content
-            connection.sendall(b"+PONG\r\n")
+        threading.Thread(target=handle_client, args=(connection,)).start()
 
 
 if __name__ == "__main__":

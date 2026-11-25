@@ -32,7 +32,7 @@ codecrafters submit
 codecrafters test
 ```
 
-Don't run the server locally; rely on remote tests. (A separate Redis instance already occupies port 6379 on this machine.)
+Local manual testing: run `./your_program.sh`, then `redis-cli PING` in another terminal (`brew install redis` provides `redis-cli`). Port 6379 is normally taken by the Docker container `langfuse-redis-1` — `docker stop langfuse-redis-1` first, `docker start langfuse-redis-1` when done.
 
 Requires `uv` and Python 3.14 (`.python-version`, `pyproject.toml`). No dependencies, no build step, no local test suite — all stage tests run remotely.
 
