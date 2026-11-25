@@ -23,6 +23,8 @@ This is a learning project. The user is following the CodeCrafters "Build Your O
 
 **Do not auto-fix runtime errors or test failures.** Report the error and ask before making any changes.
 
+**Code changes only via the Edit/Write tools** — never `sed`, heredocs, or scripts. The user follows each change through the IDE's diff view, which only shows Edit/Write changes.
+
 **Do only exactly what is asked. Nothing more.** No extra features, no refactoring, no anticipating next stages.
 
 **Scope each stage tightly.** Questions only about what the current stage needs. Don't raise bugs or gaps that a later stage will cover — incomplete code is fine if it passes the current stage. Keep questions few; don't slow the user down.

@@ -38,9 +38,9 @@ def handle_client(connection):
         elif command == b"GET":
             value = None
             with store_lock:  # check + delete must be one step
-                entry = store.get(items[1])
-                if entry is not None:
-                    value, deadline = entry
+                record = store.get(items[1])
+                if record is not None:
+                    value, deadline = record
                     if deadline != 0 and now_ms() > deadline:  # expired: lazy delete
                         del store[items[1]]
                         value = None
@@ -50,12 +50,12 @@ def handle_client(connection):
                 connection.sendall(b"$%d\r\n%s\r\n" % (len(value), value))
         elif command == b"RPUSH":
             with store_lock:  # get-or-create + append must be one step
-                entry = store.get(items[1])
-                if entry is None:
-                    entry = ([], 0)  # new list, no expiry
-                    store[items[1]] = entry
-                entry[0].append(items[2])
-                length = len(entry[0])
+                record = store.get(items[1])
+                if record is None:
+                    record = ([], 0)  # new list, no expiry
+                    store[items[1]] = record
+                record[0].extend(items[2:])  # all values in one step
+                length = len(record[0])
             connection.sendall(b":%d\r\n" % length)
         else:
             connection.sendall(b"-ERR unknown command '%s'\r\n" % items[0])
