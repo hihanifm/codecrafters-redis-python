@@ -57,6 +57,17 @@ def handle_client(connection):
                 record[0].extend(items[2:])  # all values in one step
                 length = len(record[0])
             connection.sendall(b":%d\r\n" % length)
+        elif command == b"LRANGE":
+            start, stop = int(items[2]), int(items[3])
+            with store_lock:
+                record = store.get(items[1])
+                # Redis stop is inclusive, Python slice stop is exclusive -> +1
+                # slice copies, so we can send after releasing the lock
+                values = record[0][start:stop + 1] if record else []
+            reply = b"*%d\r\n" % len(values)
+            for v in values:
+                reply += b"$%d\r\n%s\r\n" % (len(v), v)
+            connection.sendall(reply)
         else:
             connection.sendall(b"-ERR unknown command '%s'\r\n" % items[0])
 
