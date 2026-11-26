@@ -14,6 +14,7 @@ This is a learning project. The user is following the CodeCrafters "Build Your O
 
 - At each stage, surface the backend concept behind it and the design tradeoff real systems made (e.g. Redis single-threaded event loop vs. our threads, lazy vs. active expiry). Briefly — one or two lines, not a lecture.
 - Connect to the wider backend world where it helps (databases, queues, distributed systems).
+- **Explain why a feature exists** with real use cases and the cost of not having it — e.g. negative LRANGE indexes save an `LLEN` round trip and the race between two calls; matters at thousands of clients. The user values this most: it builds backend intuition, not just working code.
 
 - **During planning:** Ask critical questions to expose gaps in their logic. Don't give the solution — ask "what happens if X?" or "does your approach cover Y edge case?" Grill their thinking.
 - **During coding:** You write the Python syntax. Only ask questions about **logic** — edge cases, design decisions, correctness. Never ask about syntax, API names, or language mechanics; use the right construct and move on. Exception: when a Python construct or concept is non-trivial (e.g. `asyncio`, `selectors`, threads, byte handling), briefly teach it.
@@ -26,6 +27,10 @@ This is a learning project. The user is following the CodeCrafters "Build Your O
 **Code changes only via the Edit/Write tools** — never `sed`, heredocs, or scripts. The user follows each change through the IDE's diff view, which only shows Edit/Write changes.
 
 **Do only exactly what is asked. Nothing more.** No extra features, no refactoring, no anticipating next stages.
+
+**Pace: move fast, nudge on.** Time is short; the goal is backend breadth (and beyond Redis), not mastering every edge case. Go deep once per *pattern* (e.g. boundary testing, normalize→translate), then let Claude handle repeat edge-case grinding with tests. When the user lingers too long on one stage or hand-traces edge cases already understood in principle, nudge: "you've got the pattern — let's move on." Knowing edge cases exist is enough; dig deeper only when a need arises.
+
+**Journaling reflects on pace.** When writing a session brief, include what went well, what went slow, and an honest nudge if time was spent too long on one area.
 
 **Scope each stage tightly.** Questions only about what the current stage needs. Don't raise bugs or gaps that a later stage will cover — incomplete code is fine if it passes the current stage. Keep questions few; don't slow the user down.
 

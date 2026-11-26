@@ -2,6 +2,8 @@ import socket  # noqa: F401
 import threading
 import time
 
+from app.ranges import redis_range_to_python_slice
+
 store = {}  # shared by all client threads
 store_lock = threading.Lock()  # guards every access to store
 
@@ -16,33 +18,33 @@ def handle_client(connection):
         if not data:  # client closed the connection
             connection.close()
             break
-        # *N\r\n$len\r\nitem\r\n... -> items are every 2nd part after the array header
-        items = data.split(b"\r\n")[2::2]
-        command = items[0].upper()
+        # *N\r\n$len\r\nitem\r\n... -> values are every 2nd part after the array header
+        name, *args = data.split(b"\r\n")[2::2]
+        command = name.upper()
         if command == b"PING":
             connection.sendall(b"+PONG\r\n")
         elif command == b"ECHO":
-            arg = items[1]
+            arg = args[0]
             connection.sendall(b"$%d\r\n%s\r\n" % (len(arg), arg))
         elif command == b"SET":
             deadline = 0  # 0 = no expiry
-            if len(items) > 4 and items[3].upper() == b"PX":
-                px = int(items[4])
+            if len(args) > 3 and args[2].upper() == b"PX":
+                px = int(args[3])
                 if px <= 0:
                     connection.sendall(b"-ERR invalid expire time in 'set' command\r\n")
                     continue
                 deadline = now_ms() + px
             with store_lock:
-                store[items[1]] = (items[2], deadline)
+                store[args[0]] = (args[1], deadline)
             connection.sendall(b"+OK\r\n")
         elif command == b"GET":
             value = None
             with store_lock:  # check + delete must be one step
-                record = store.get(items[1])
+                record = store.get(args[0])
                 if record is not None:
                     value, deadline = record
                     if deadline != 0 and now_ms() > deadline:  # expired: lazy delete
-                        del store[items[1]]
+                        del store[args[0]]
                         value = None
             if value is None:
                 connection.sendall(b"$-1\r\n")
@@ -50,26 +52,29 @@ def handle_client(connection):
                 connection.sendall(b"$%d\r\n%s\r\n" % (len(value), value))
         elif command == b"RPUSH":
             with store_lock:  # get-or-create + append must be one step
-                record = store.get(items[1])
+                record = store.get(args[0])
                 if record is None:
                     record = ([], 0)  # new list, no expiry
-                    store[items[1]] = record
-                record[0].extend(items[2:])  # all values in one step
+                    store[args[0]] = record
+                record[0].extend(args[1:])  # all values in one step
                 length = len(record[0])
             connection.sendall(b":%d\r\n" % length)
         elif command == b"LRANGE":
-            start, stop = int(items[2]), int(items[3])
+            start, stop = int(args[1]), int(args[2])
             with store_lock:
-                record = store.get(items[1])
-                # Redis stop is inclusive, Python slice stop is exclusive -> +1
-                # slice copies, so we can send after releasing the lock
-                values = record[0][start:stop + 1] if record else []
+                record = store.get(args[0])
+                if record:
+                    py_start, py_stop = redis_range_to_python_slice(start, stop, len(record[0]))
+                    # slice copies, so we can send after releasing the lock
+                    values = record[0][py_start:py_stop]
+                else:
+                    values = []
             reply = b"*%d\r\n" % len(values)
             for v in values:
                 reply += b"$%d\r\n%s\r\n" % (len(v), v)
             connection.sendall(reply)
         else:
-            connection.sendall(b"-ERR unknown command '%s'\r\n" % items[0])
+            connection.sendall(b"-ERR unknown command '%s'\r\n" % name)
 
 
 def main():
