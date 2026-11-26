@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redis Ch.1 — Basics: revision</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1f2328; --muted: #656d76; --card: #ffffff;
+    --line: #e4e1da; --accent: #b5402a; --ok: #1a7f37; --bad: #cf222e;
+    --code: #f3f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a; --fg: #e6e6e6; --muted: #9198a1; --card: #1e2024;
+      --line: #2e3137; --accent: #ff7b5c; --ok: #3fb950; --bad: #f85149;
+      --code: #26292e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  nav { display: flex; gap: 8px; margin-bottom: 28px; }
+  nav button {
+    font: inherit; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  }
+  nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  h2 { font-size: 19px; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 10px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .why {
+    border-left: 3px solid var(--accent); padding: 6px 12px; margin: 12px 0;
+    background: var(--card); border-radius: 0 6px 6px 0;
+  }
+  .why b { color: var(--accent); }
+  .q { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+  .q p { margin: 0 0 10px; font-weight: 600; }
+  .q label { display: block; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .q label:hover { border-color: var(--line); }
+  .q input { margin-right: 8px; }
+  .q label.right { border-color: var(--ok); color: var(--ok); }
+  .q label.wrong { border-color: var(--bad); color: var(--bad); }
+  .explain { display: none; margin-top: 10px; color: var(--muted); font-size: 15px; }
+  .q.done .explain { display: block; }
+  #score { position: sticky; top: 0; background: var(--bg); padding: 10px 0; font-weight: 600; z-index: 1; }
+  .reset { font: inherit; margin-top: 16px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Redis Ch.1 — Basics</h1>
+  <p class="sub">Revision from building Redis in Python · completed 2026-11-25 · 7 stages</p>
+
+  <nav role="tablist">
+    <button role="tab" aria-selected="true" data-tab="sheet">Cheat sheet</button>
+    <button role="tab" aria-selected="false" data-tab="quiz">Quiz</button>
+  </nav>
+
+  <section id="sheet">
+    <h2>1. TCP server</h2>
+    <ul>
+      <li><code>socket.create_server(("localhost", 6379))</code> → <code>accept()</code> blocks until a client connects.</li>
+      <li><code>recv()</code> returns <code>b""</code> when the client closes cleanly → close and break, or the loop crashes the server.</li>
+      <li>Abrupt drop raises <code>ConnectionResetError</code> (still unhandled — known gap).</li>
+    </ul>
+
+    <h2>2. RESP — REdis Serialization Protocol</h2>
+    <table>
+      <tr><th>Type</th><th>Prefix</th><th>Example</th></tr>
+      <tr><td>Simple string</td><td><code>+</code></td><td><code>+PONG\r\n</code></td></tr>
+      <tr><td>Error</td><td><code>-</code></td><td><code>-ERR unknown command 'FOO'\r\n</code></td></tr>
+      <tr><td>Integer</td><td><code>:</code></td><td><code>:1\r\n</code></td></tr>
+      <tr><td>Bulk string</td><td><code>$len</code></td><td><code>$3\r\nhey\r\n</code></td></tr>
+      <tr><td>Null bulk</td><td><code>$-1</code></td><td><code>$-1\r\n</code> (missing key)</td></tr>
+      <tr><td>Array</td><td><code>*count</code></td><td><code>*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n</code></td></tr>
+    </table>
+    <ul>
+      <li>Every item sits on its own line ending in <code>\r\n</code> (CR + LF, two bytes). Backslash is escape syntax, not a byte.</li>
+      <li><code>split(b"\r\n")[2::2]</code> → skip the array header, take every 2nd part → just the values.</li>
+      <li><code>split</code> drops the delimiter; <code>splitlines(keepends=True)</code>, <code>re.split</code> with a group, or <code>partition</code> keep it.</li>
+      <li>Commands are case-insensitive: compare <code>name.upper()</code>.</li>
+    </ul>
+
+    <h2>3. Concurrency</h2>
+    <ul>
+      <li>One thread per client: an idle client blocks only its own thread.</li>
+      <li><b>GIL</b>: one thread runs Python at a time; released while waiting on I/O → fine for network servers.</li>
+      <li>Single dict operation = safe. Read-modify-write (<code>x = x + 1</code>) = <b>race</b> → needs <code>threading.Lock</code>.</li>
+      <li>GIL safety is a CPython implementation detail, not a language promise. Free-threaded Python (3.13+/3.14) has no GIL.</li>
+      <li>We lock every store access. Keep the critical section tiny; send on the network <i>after</i> releasing.</li>
+    </ul>
+    <div class="why"><b>Why real Redis differs:</b> one thread + an event loop runs every command, so no locks are needed and commands are naturally atomic. Since 6.0, extra threads handle only network I/O.</div>
+
+    <h2>4. Consistency terms</h2>
+    <ul>
+      <li><b>Eventual consistency</b> = distributed replicas may serve stale data for a while. Not our case.</li>
+      <li>Lock-free single reads here are still consistent. <b>Torn reads</b> appear when one write touches several keys.</li>
+    </ul>
+
+    <h2>5. Expiry (SET … PX ms)</h2>
+    <ul>
+      <li>Store <code>(value, deadline)</code>; <code>deadline = now + px</code>, 0 = none. <code>PX 0</code> → error.</li>
+      <li><b>Lazy expiration</b>: check on GET, delete if past deadline. Check + delete = one lock.</li>
+      <li>Terms: <i>elapsed</i> = time spent · <i>TTL</i> = time to live · <i>deadline</i> = when it dies.</li>
+      <li><code>time.monotonic()</code> never jumps backwards → safe for durations. <code>time.time()</code> is wall clock and can jump.</li>
+    </ul>
+    <div class="why"><b>Why Redis does both lazy + active:</b> lazy is cheap per read, but keys nobody reads again leak memory. Redis also samples keys periodically to evict them. Redis stores wall-clock ms because deadlines are persisted to disk.</div>
+
+    <h2>6. Python bits picked up</h2>
+    <ul>
+      <li>Tuples: <code>record = (value, deadline)</code> packs, <code>value, deadline = record</code> unpacks. The comma makes the tuple.</li>
+      <li>Slicing <code>[start:stop:step]</code>; <code>a, b = b, a</code> swaps.</li>
+    </ul>
+
+    <h2>7. Tangents worth keeping</h2>
+    <ul>
+      <li>Redis: written in C by antirez (2009). 2.6 Lua · 3.0 Cluster · 4.0 Modules · 5.0 Streams · 6.0 ACL/TLS/RESP3 · 2024 license change → Valkey fork · 8.0 AGPL option back.</li>
+      <li><b>ACLs</b> = identity + allowed actions + allowed resources, deny the rest. Same idea scales to agents: per-group identities, read vs act credentials, human confirm for side effects.</li>
+      <li>Frontend vs backend: different domains, not ranked — MVC/MVP were born in UI work.</li>
+    </ul>
+  </section>
+
+  <section id="quiz" hidden>
+    <div id="score">Score: 0 / 0</div>
+    <div id="questions"></div>
+    <button class="reset" id="reset">Reset quiz</button>
+  </section>
+</main>
+
+<script>
+const QUIZ = [
+  { q: "What does RESP stand for?",
+    a: ["Redis String Protocol", "REdis Serialization Protocol", "Remote Execution Socket Protocol", "Redis Event Stream Protocol"],
+    c: 1, e: "Serialization — it encodes strings, integers, errors, arrays and nulls, not just strings." },
+  { q: "recv() returns b\"\". What happened?",
+    a: ["The client sent an empty command", "A network error occurred", "The client closed the connection cleanly", "The buffer is full"],
+    c: 2, e: "Empty bytes = clean close. An abrupt drop raises ConnectionResetError instead." },
+  { q: "How does a client send ECHO hey on the wire?",
+    a: ["+ECHO hey\\r\\n", "*2\\r\\n$4\\r\\nECHO\\r\\n$3\\r\\nhey\\r\\n", "$8\\r\\nECHO hey\\r\\n", "ECHO hey\\n"],
+    c: 1, e: "An array (*2) of two bulk strings, each with its length line." },
+  { q: "GET on a key that doesn't exist replies…",
+    a: ["+nil\\r\\n", "-ERR no such key\\r\\n", "$-1\\r\\n", ":0\\r\\n"],
+    c: 2, e: "Null bulk string. redis-cli shows it as (nil)." },
+  { q: "Which is NOT safe across threads without a lock, even with the GIL?",
+    a: ["store[k] = v", "store.get(k)", "store[k] = store[k] + 1", "len(store)"],
+    c: 2, e: "Read-modify-write is several steps; Python can switch threads between them → lost update." },
+  { q: "Why is thread-per-client OK in Python despite the GIL?",
+    a: ["The GIL is disabled for sockets", "Threads spend most time waiting on I/O, and the GIL is released while waiting", "Python runs threads on separate cores", "It isn't OK — it deadlocks"],
+    c: 1, e: "I/O-bound work releases the GIL. CPU-bound work wouldn't speed up." },
+  { q: "How does real Redis avoid locks around its data?",
+    a: ["Lock-free hash tables", "One thread runs all commands via an event loop", "Each client gets its own copy", "It uses database transactions"],
+    c: 1, e: "Single-threaded command execution = every command is atomic by construction." },
+  { q: "Skipping the read lock here is 'eventual consistency'. True?",
+    a: ["True", "False — eventual consistency is about distributed replicas serving stale data"],
+    c: 1, e: "After SET returns OK, the next GET sees it immediately. That's strong consistency." },
+  { q: "SET k v PX 100 — what do we store as the expiry?",
+    a: ["100", "Time elapsed since start", "Absolute deadline: now + 100 ms", "The TTL in seconds"],
+    c: 2, e: "GET just compares now > deadline. Storing raw TTL would also need the set time." },
+  { q: "Our expiry strategy (check on read, delete if expired) is called…",
+    a: ["Active expiration", "Lazy expiration", "Write-through", "Garbage collection"],
+    c: 1, e: "Real Redis does lazy + a periodic active sweep, so unread keys don't leak memory." },
+  { q: "Why time.monotonic() over time.time() for deadlines?",
+    a: ["It's faster", "It has more precision", "It never goes backwards, so clock corrections can't expire keys early or late", "It returns milliseconds"],
+    c: 2, e: "Wall clock can jump (NTP, manual change). Monotonic only moves forward." },
+  { q: "In GET, why must the lock cover both the expiry check and the delete?",
+    a: ["Python requires it", "Check-then-act is a compound operation; another thread could SET in between", "Deleting is slow", "It doesn't need to"],
+    c: 1, e: "Without one lock, you could delete a value another client just refreshed." },
+];
+
+const box = document.getElementById("questions");
+const scoreEl = document.getElementById("score");
+let answered = 0, right = 0;
+
+function render() {
+  answered = 0; right = 0; box.innerHTML = "";
+  QUIZ.forEach((item, i) => {
+    const div = document.createElement("div");
+    div.className = "q";
+    div.innerHTML = `<p>${i + 1}. ${item.q}</p>` +
+      item.a.map((opt, j) => `<label><input type="radio" name="q${i}" value="${j}">${opt}</label>`).join("") +
+      `<div class="explain">${item.e}</div>`;
+    div.addEventListener("change", (ev) => {
+      if (div.classList.contains("done")) return;
+      const pick = Number(ev.target.value);
+      div.classList.add("done");
+      const labels = div.querySelectorAll("label");
+      labels[item.c].classList.add("right");
+      if (pick !== item.c) labels[pick].classList.add("wrong"); else right++;
+      answered++;
+      div.querySelectorAll("input").forEach(x => x.disabled = true);
+      updateScore();
+    });
+    box.appendChild(div);
+  });
+  updateScore();
+}
+function updateScore() { scoreEl.textContent = `Score: ${right} / ${answered}  ·  ${QUIZ.length} questions`; }
+document.getElementById("reset").onclick = render;
+
+document.querySelectorAll("nav button").forEach(btn => btn.onclick = () => {
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", b === btn));
+  document.getElementById("sheet").hidden = btn.dataset.tab !== "sheet";
+  document.getElementById("quiz").hidden = btn.dataset.tab !== "quiz";
+});
+render();
+</script>
+</body>
+</html>
