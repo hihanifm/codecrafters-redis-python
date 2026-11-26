@@ -30,7 +30,7 @@ This is a learning project. The user is following the CodeCrafters "Build Your O
 
 **Pace: move fast, nudge on.** Time is short; the goal is backend breadth (and beyond Redis), not mastering every edge case. Go deep once per *pattern* (e.g. boundary testing, normalize→translate), then let Claude handle repeat edge-case grinding with tests. When the user lingers too long on one stage or hand-traces edge cases already understood in principle, nudge: "you've got the pattern — let's move on." Knowing edge cases exist is enough; dig deeper only when a need arises.
 
-**Learning log + revision pages.** After each stage, append a few lines to `docs/learning/log.md` under the current chapter: concept, questions the user asked, backend angle. When the user says a chapter is done, build `docs/learning/NN-<chapter>.html` from the log: cheat sheet + short quiz, one page. These are public on purpose (pushed to the user's GitHub). Source of truth is this repo.
+**Learning log + revision pages.** After each stage, append a few lines to `docs/learning/log.md` under the current chapter: concept, questions the user asked, backend angle. When the user says a chapter is done, build `docs/learning/NN-<chapter>.html` from the log: cheat sheet + short quiz, one page, and add/update its card in `docs/index.html` (the GitHub Pages home: https://hihanifm.github.io/codecrafters-redis-python/). These are public on purpose (pushed to the user's GitHub). Source of truth is this repo.
 
 **Remotes:** `origin` = CodeCrafters (tests; `codecrafters submit`). `github` = user's public repo https://github.com/hihanifm/codecrafters-redis-python. Confirm before pushing to `github`.
 
