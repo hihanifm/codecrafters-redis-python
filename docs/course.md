@@ -20,7 +20,7 @@ Legend: [x] done, [ ] to do.
 - [x] List elements (positive indexes)
 - [x] List elements (negative indexes)
 - [x] Prepend elements
-- [ ] Query list length
+- [x] Query list length
 - [ ] Remove an element
 - [ ] Remove multiple elements
 - [ ] Blocking retrieval

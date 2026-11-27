@@ -62,3 +62,9 @@ Running notes from building Redis in Python (CodeCrafters, `~/work/codecrafters-
 - Amortized ≠ never slow: rare resize still a latency spike (p99). Redis rehashes its hash table incrementally for the same reason.
 - Switched store to `collections.deque` (blocks of 64, doubly linked): O(1) both ends, O(n) middle — same tradeoff as Redis lists. `extendleft(args)` = appendleft each in order. No slicing → LRANGE uses `islice` (O(stop), matches Redis O(S+N)). Range helper untouched: clean interface, swapped container.
 - Shared `get_or_create_list` helper (caller holds lock). Whole multi-value push under lock = atomic.
+
+### Query length (LLEN)
+- Missing key → `:0`. Redis deletes a list when its last element is popped, so "exists but empty" never happens: missing key = empty list. Separate question "is it there?" = `EXISTS`.
+- Error for a normal state (drained queue) would force error handling on the happy path. Real error case = wrong type (`WRONGTYPE`, deferred).
+- Use: queue depth for monitoring / autoscaling workers.
+- Note: CodeCrafters only tests the next stage after it's marked complete in the browser.
