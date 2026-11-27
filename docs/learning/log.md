@@ -55,3 +55,10 @@ Running notes from building Redis in Python (CodeCrafters, `~/work/codecrafters-
 - Method: TDD red→green; equivalence partitioning (happy path, stop past end, start past end, both); table-driven tests with `subTest`. Pure function `redis_range_to_python_slice` in `app/ranges.py`.
 - Renamed `items` → `name, *args`.
 - Pace note: deep-dived edge cases by hand; good once per pattern, then move on.
+
+### Prepend (LPUSH)
+- `LPUSH k a b c` → `[c, b, a, ...old]`: each value pushed onto head in arg order. Mix with RPUSH freely: RPUSH+LPOP = FIFO queue, LPUSH+LPOP = stack, LPUSH on a FIFO queue = crude priority lane.
+- Python `list` = dynamic array: append amortized O(1), `insert(0)` O(n) (shift everything). CPython grows ~1/8 + 6, rounded to 4 → memory vs time tradeoff (vs 2× elsewhere).
+- Amortized ≠ never slow: rare resize still a latency spike (p99). Redis rehashes its hash table incrementally for the same reason.
+- Switched store to `collections.deque` (blocks of 64, doubly linked): O(1) both ends, O(n) middle — same tradeoff as Redis lists. `extendleft(args)` = appendleft each in order. No slicing → LRANGE uses `islice` (O(stop), matches Redis O(S+N)). Range helper untouched: clean interface, swapped container.
+- Shared `get_or_create_list` helper (caller holds lock). Whole multi-value push under lock = atomic.

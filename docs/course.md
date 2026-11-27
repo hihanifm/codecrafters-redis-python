@@ -19,7 +19,7 @@ Legend: [x] done, [ ] to do.
 - [x] Append multiple elements
 - [x] List elements (positive indexes)
 - [x] List elements (negative indexes)
-- [ ] Prepend elements
+- [x] Prepend elements
 - [ ] Query list length
 - [ ] Remove an element
 - [ ] Remove multiple elements

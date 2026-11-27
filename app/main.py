@@ -73,6 +73,11 @@ def handle_client(connection):
                 items.extendleft(args[1:])  # appendleft each in order: a b c -> [c, b, a]
                 length = len(items)
             connection.sendall(b":%d\r\n" % length)
+        elif command == b"LLEN":
+            with store_lock:
+                record = store.get(args[0])
+                length = len(record[0]) if record else 0  # missing key = empty list
+            connection.sendall(b":%d\r\n" % length)
         elif command == b"LRANGE":
             start, stop = int(args[1]), int(args[2])
             with store_lock:
