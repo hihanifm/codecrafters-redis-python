@@ -62,6 +62,17 @@ def llen(args):
     return resp.integer(length)
 
 
+def lpop(args):
+    value = None
+    with store_lock:  # pop + delete-if-empty must be one step
+        record = store.get(args[0])
+        if record:
+            value = record[0].popleft()
+            if not record[0]:
+                del store[args[0]]  # empty list = no key
+    return resp.bulk(value)  # None -> nil, distinct from an empty-string element
+
+
 def lrange(args):
     start, stop = int(args[1]), int(args[2])
     with store_lock:
@@ -84,6 +95,7 @@ COMMANDS = {
     b"RPUSH": rpush,
     b"LPUSH": lpush,
     b"LLEN": llen,
+    b"LPOP": lpop,
     b"LRANGE": lrange,
 }
 
