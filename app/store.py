@@ -5,7 +5,8 @@ import time
 from collections import deque
 
 store = {}  # shared by all client threads
-store_lock = threading.Lock()  # guards every access to store
+store_lock = threading.Lock()  # guards every access to store and waiters
+waiters = {}  # key -> deque of blocked-client slots {"event", "value"}, oldest first
 
 
 def now_ms():

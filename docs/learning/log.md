@@ -68,3 +68,11 @@ Running notes from building Redis in Python (CodeCrafters, `~/work/codecrafters-
 - Error for a normal state (drained queue) would force error handling on the happy path. Real error case = wrong type (`WRONGTYPE`, deferred).
 - Use: queue depth for monitoring / autoscaling workers.
 - Note: CodeCrafters only tests the next stage after it's marked complete in the browser.
+
+### Remove element(s) (LPOP, LPOP count)
+- Consumer half of a queue. Atomic pop = two workers never get the same job; LRANGE+LTRIM would race → duplicate work.
+- Missing key → nil (`$-1`), not `""`: an empty string can be a real element. Absence ≠ value.
+- Pop last element → delete key: saves memory, keeps "missing = empty" invariant (LLEN/EXISTS honest), frees key for other types.
+- Count → array reply (up to count; fewer if list shorter); missing key + count → null array `*-1`. Reply type depends on request shape.
+- Why count: batching, one round trip for N jobs (throughput vs latency).
+- Refactor first (green baseline): `resp.py` / `store.py` / `commands.py` / `main.py`. Dict dispatch (add stage = function + one line, open/closed). Commands return bytes, no sockets → testable (functional core, imperative shell). Mirrors Redis `networking.c` / `t_list.c`.

@@ -21,8 +21,8 @@ Legend: [x] done, [ ] to do.
 - [x] List elements (negative indexes)
 - [x] Prepend elements
 - [x] Query list length
-- [ ] Remove an element
-- [ ] Remove multiple elements
+- [x] Remove an element
+- [x] Remove multiple elements
 - [ ] Blocking retrieval
 - [ ] Blocking retrieval with timeout
 
