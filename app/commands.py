@@ -63,14 +63,19 @@ def llen(args):
 
 
 def lpop(args):
-    value = None
+    count = int(args[1]) if len(args) > 1 else None  # no count -> bulk reply, count -> array
+    values = None
     with store_lock:  # pop + delete-if-empty must be one step
         record = store.get(args[0])
         if record:
-            value = record[0].popleft()
-            if not record[0]:
+            items = record[0]
+            n = 1 if count is None else min(count, len(items))  # ask for more than exist -> get what's there
+            values = [items.popleft() for _ in range(n)]
+            if not items:
                 del store[args[0]]  # empty list = no key
-    return resp.bulk(value)  # None -> nil, distinct from an empty-string element
+    if count is None:
+        return resp.bulk(values[0] if values else None)  # None -> nil, distinct from "" element
+    return resp.array(values)  # None -> null array
 
 
 def lrange(args):

@@ -25,4 +25,6 @@ def bulk(value):
 
 
 def array(values):
+    if values is None:
+        return b"*-1\r\n"  # null array
     return b"*%d\r\n" % len(values) + b"".join(bulk(v) for v in values)
