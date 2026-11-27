@@ -97,7 +97,8 @@ def lpop(args):
 
 
 def blpop(args):
-    key = args[0]  # single key, timeout 0 (block forever) for now
+    key = args[0]  # single key
+    timeout = float(args[1]) or None  # seconds; 0 = block forever (wait(None))
     with store_lock:
         record = store.get(key)
         if record:  # data ready: behave like LPOP
@@ -107,7 +108,15 @@ def blpop(args):
             return resp.array([key, value])
         waiter = {"event": threading.Event(), "value": None}
         waiters.setdefault(key, deque()).append(waiter)  # join the line for this key
-    waiter["event"].wait()  # sleep outside the lock; pusher fills value before set()
+    waiter["event"].wait(timeout)  # sleep outside the lock; pusher fills value before set()
+    with store_lock:  # decide "got value" vs "timed out" atomically with pushers
+        if waiter["value"] is None:  # timed out, nobody served us
+            queue = waiters.get(key)
+            queue.remove(waiter)  # leave the line, or a pusher would hand a value to a ghost
+            if not queue:
+                del waiters[key]
+            return resp.array(None)  # null array
+    # served (even if the timeout fired at the same moment): take the value
     return resp.array([key, waiter["value"]])
 
 

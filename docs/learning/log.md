@@ -76,3 +76,12 @@ Running notes from building Redis in Python (CodeCrafters, `~/work/codecrafters-
 - Count → array reply (up to count; fewer if list shorter); missing key + count → null array `*-1`. Reply type depends on request shape.
 - Why count: batching, one round trip for N jobs (throughput vs latency).
 - Refactor first (green baseline): `resp.py` / `store.py` / `commands.py` / `main.py`. Dict dispatch (add stage = function + one line, open/closed). Commands return bytes, no sockets → testable (functional core, imperative shell). Mirrors Redis `networking.c` / `t_list.c`.
+
+### Blocking retrieval (BLPOP, timeout 0)
+- Why: idle workers polling LPOP waste round trips + add latency; blocking = zero idle traffic, instant wake-up (like long-polling, `select()`).
+- Python primitives sleep in the kernel (futex): `Semaphore` (counter), `Event` (one-shot flag, `set()` wakes ALL), `Condition` (lock + wait queue, `notify()` wakes one, re-check in `while`).
+- Design: per-key `deque` of waiter slots `{"event", "value"}` under the global lock. Python gives the pager (Event); we keep the clipboard (who, which key, what order).
+- FIFO fairness: longest-blocked client served first (Redis guarantee; tester checks it). Avoids starvation.
+- Race: waiter wakes, but before it re-takes the lock another client LPOPs the value. Fix: pusher pops and hands value into the waiter's slot under the lock, then `set()`. Redis does the same (serves blocked clients right after a push).
+- RPUSH replies length before the hand-off (`:1` even though the waiter took it).
+- Store mental model: dict key(bytes) → (value, deadline); value's Python type = Redis type (bytes = string, deque = list). Real Redis: `redisObject` type tag + pointer.

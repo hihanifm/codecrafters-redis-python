@@ -23,7 +23,7 @@ Legend: [x] done, [ ] to do.
 - [x] Query list length
 - [x] Remove an element
 - [x] Remove multiple elements
-- [ ] Blocking retrieval
+- [x] Blocking retrieval
 - [ ] Blocking retrieval with timeout
 
 ## 3. Streams (13)
