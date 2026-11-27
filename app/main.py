@@ -1,6 +1,8 @@
 import socket  # noqa: F401
 import threading
 import time
+from collections import deque
+from itertools import islice
 
 from app.ranges import redis_range_to_python_slice
 
@@ -10,6 +12,15 @@ store_lock = threading.Lock()  # guards every access to store
 
 def now_ms():
     return time.monotonic() * 1000
+
+
+def get_or_create_list(key):
+    # caller must hold store_lock
+    record = store.get(key)
+    if record is None:
+        record = (deque(), 0)  # new list, no expiry; O(1) push at both ends
+        store[key] = record
+    return record[0]
 
 
 def handle_client(connection):
@@ -52,12 +63,15 @@ def handle_client(connection):
                 connection.sendall(b"$%d\r\n%s\r\n" % (len(value), value))
         elif command == b"RPUSH":
             with store_lock:  # get-or-create + append must be one step
-                record = store.get(args[0])
-                if record is None:
-                    record = ([], 0)  # new list, no expiry
-                    store[args[0]] = record
-                record[0].extend(args[1:])  # all values in one step
-                length = len(record[0])
+                items = get_or_create_list(args[0])
+                items.extend(args[1:])  # all values in one step
+                length = len(items)
+            connection.sendall(b":%d\r\n" % length)
+        elif command == b"LPUSH":
+            with store_lock:  # get-or-create + prepend must be one step
+                items = get_or_create_list(args[0])
+                items.extendleft(args[1:])  # appendleft each in order: a b c -> [c, b, a]
+                length = len(items)
             connection.sendall(b":%d\r\n" % length)
         elif command == b"LRANGE":
             start, stop = int(args[1]), int(args[2])
@@ -65,8 +79,9 @@ def handle_client(connection):
                 record = store.get(args[0])
                 if record:
                     py_start, py_stop = redis_range_to_python_slice(start, stop, len(record[0]))
-                    # slice copies, so we can send after releasing the lock
-                    values = record[0][py_start:py_stop]
+                    # deque has no slicing; islice walks from the left (O(stop), like Redis's O(S+N))
+                    # list() copies, so we can send after releasing the lock
+                    values = list(islice(record[0], py_start, py_stop))
                 else:
                     values = []
             reply = b"*%d\r\n" % len(values)
