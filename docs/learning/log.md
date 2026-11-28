@@ -37,7 +37,7 @@ Running notes from building Redis in Python (CodeCrafters, `~/work/codecrafters-
 - Check-then-delete = compound op → one lock.
 - Tangent: Redis written in C (antirez, 2009); timeline 2.6 Lua, 3.0 Cluster, 5.0 Streams, 6.0 ACL/TLS/RESP3, 2024 license change → Valkey fork. ACLs ↔ least privilege for agents.
 
-## Chapter 2: Lists (in progress)
+## Chapter 2: Lists
 
 ### Create list / append (RPUSH)
 - RESP integer `:1\r\n` (list length).
@@ -85,3 +85,11 @@ Running notes from building Redis in Python (CodeCrafters, `~/work/codecrafters-
 - Race: waiter wakes, but before it re-takes the lock another client LPOPs the value. Fix: pusher pops and hands value into the waiter's slot under the lock, then `set()`. Redis does the same (serves blocked clients right after a push).
 - RPUSH replies length before the hand-off (`:1` even though the waiter took it).
 - Store mental model: dict key(bytes) → (value, deadline); value's Python type = Redis type (bytes = string, deque = list). Real Redis: `redisObject` type tag + pointer.
+
+### Blocking retrieval with timeout (BLPOP key 0.5)
+- Timeout in seconds (float); 0 = forever. `Event.wait(timeout)`; timeout → null array `*-1`.
+- Why: a forever-blocked worker can't shut down, health-check, or switch queues. Timeout = heartbeat (same idea: socket timeouts, long-poll timeouts, lock leases).
+- On timeout, remove own slot from the waiter queue, else a pusher hands a value to a ghost and it's lost.
+- Race: timeout fires as a pusher serves us. Re-take lock, check slot: value set → take it; else leave line. Lock makes the decision atomic with pushers. `None` sentinel safe since values are always bytes.
+
+Chapter 2 complete (2026-11-27).

@@ -24,7 +24,7 @@ Legend: [x] done, [ ] to do.
 - [x] Remove an element
 - [x] Remove multiple elements
 - [x] Blocking retrieval
-- [ ] Blocking retrieval with timeout
+- [x] Blocking retrieval with timeout
 
 ## 3. Streams (13)
 - [ ] The TYPE command

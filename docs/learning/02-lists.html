@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redis Ch.2 — Lists: revision</title>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1f2328; --muted: #656d76; --card: #ffffff;
+    --line: #e4e1da; --accent: #b5402a; --ok: #1a7f37; --bad: #cf222e;
+    --code: #f3f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a; --fg: #e6e6e6; --muted: #9198a1; --card: #1e2024;
+      --line: #2e3137; --accent: #ff7b5c; --ok: #3fb950; --bad: #f85149;
+      --code: #26292e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  nav { display: flex; gap: 8px; margin-bottom: 28px; }
+  nav button {
+    font: inherit; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  }
+  nav button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  h2 { font-size: 19px; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 10px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .why {
+    border-left: 3px solid var(--accent); padding: 6px 12px; margin: 12px 0;
+    background: var(--card); border-radius: 0 6px 6px 0;
+  }
+  .why b { color: var(--accent); }
+  .q { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+  .q p { margin: 0 0 10px; font-weight: 600; }
+  .q label { display: block; padding: 7px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .q label:hover { border-color: var(--line); }
+  .q input { margin-right: 8px; }
+  .q label.right { border-color: var(--ok); color: var(--ok); }
+  .q label.wrong { border-color: var(--bad); color: var(--bad); }
+  .explain { display: none; margin-top: 10px; color: var(--muted); font-size: 15px; }
+  .q.done .explain { display: block; }
+  #score { position: sticky; top: 0; background: var(--bg); padding: 10px 0; font-weight: 600; z-index: 1; }
+  .reset { font: inherit; margin-top: 16px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Redis Ch.2 — Lists</h1>
+  <p class="sub">Revision from building Redis in Python · completed 2026-11-27 · 11 stages</p>
+
+  <nav role="tablist">
+    <button role="tab" aria-selected="true" data-tab="sheet">Cheat sheet</button>
+    <button role="tab" aria-selected="false" data-tab="quiz">Quiz</button>
+  </nav>
+
+  <section id="sheet">
+    <h2>1. Commands</h2>
+    <table>
+      <tr><th>Command</th><th>Does</th><th>Reply</th></tr>
+      <tr><td><code>RPUSH k a b</code></td><td>Append at tail; creates list</td><td><code>:len</code></td></tr>
+      <tr><td><code>LPUSH k a b c</code></td><td>Prepend each in order → <code>[c, b, a, …]</code></td><td><code>:len</code></td></tr>
+      <tr><td><code>LRANGE k 0 -1</code></td><td>Elements start..stop, both inclusive</td><td>array</td></tr>
+      <tr><td><code>LLEN k</code></td><td>Length; missing key → 0</td><td><code>:len</code></td></tr>
+      <tr><td><code>LPOP k [n]</code></td><td>Remove from head</td><td>bulk (no n) / array (n); nil if missing</td></tr>
+      <tr><td><code>BLPOP k timeout</code></td><td>Pop, or block until a push; 0 = forever</td><td><code>[key, value]</code> or <code>*-1</code></td></tr>
+    </table>
+    <div class="why"><b>Queue patterns:</b> RPUSH + LPOP = FIFO job queue (Resque, Sidekiq) · LPUSH + LPOP = stack · LPUSH on a FIFO queue = crude priority lane · LPUSH + LTRIM = capped newest-first feed.</div>
+
+    <h2>2. Index math (LRANGE)</h2>
+    <ul>
+      <li>Redis stop is <b>inclusive</b>; Python slice stop is exclusive → <code>stop + 1</code>.</li>
+      <li>Negative index = another <i>name</i> for a position (<code>-1</code> = last), not a direction.</li>
+      <li><b>Normalize → translate</b>: <code>len + idx</code>; start still negative → 0; stop still negative → empty; then <code>+1</code>.</li>
+      <li><b>Fencepost:</b> inclusive count = <code>stop − start + 1</code>; half-open <code>[a, b)</code> count = <code>b − a</code>. Half-open joins cleanly and makes empty ranges natural (Dijkstra).</li>
+      <li>Tested as a pure function with boundary partitions (TDD, table-driven <code>subTest</code>).</li>
+    </ul>
+    <div class="why"><b>Why negatives exist:</b> "last N" = <code>LRANGE k -N -1</code> in one atomic command. Otherwise LLEN + LRANGE = two round trips and a race between them.</div>
+
+    <h2>3. Data structure: array vs deque</h2>
+    <table>
+      <tr><th></th><th>Python <code>list</code> (dynamic array)</th><th><code>deque</code></th><th>Redis list</th></tr>
+      <tr><td>Push tail</td><td>O(1) amortized</td><td>O(1)</td><td>O(1)</td></tr>
+      <tr><td>Push head</td><td><b>O(n)</b> (shift all)</td><td>O(1)</td><td>O(1)</td></tr>
+      <tr><td>Index middle</td><td>O(1)</td><td>O(n)</td><td>O(n)</td></tr>
+    </table>
+    <ul>
+      <li><b>Amortized</b>: rare resize copies everything, but geometric growth (CPython ~1/8 + 6) spreads the cost → O(1) average. Single append can still spike.</li>
+      <li>deque = doubly linked blocks of 64 slots. No slicing → <code>itertools.islice</code> (O(stop), like Redis LRANGE O(S+N)).</li>
+    </ul>
+    <div class="why"><b>Tail latency:</b> averages hide spikes; servers care about p99. Redis grows its hash table with <b>incremental rehashing</b> so no single command pays for the whole copy.</div>
+
+    <h2>4. Store model</h2>
+<pre>store = { b"name": (b"hanif", 0),            # string: value is bytes
+          b"jobs": (deque([b"a", b"b"]), 0) } # list: deque of bytes
+          key=bytes  (value, deadline)        # value's type = Redis type</pre>
+    <ul>
+      <li>Keys are binary-safe strings (bytes). <code>:</code> namespacing is convention only.</li>
+      <li>Empty list = no key: pop the last element → delete. Keeps "missing = empty" true, so LLEN 0 / EXISTS 0 stay honest.</li>
+      <li>Nil (<code>$-1</code>) ≠ empty string (<code>$0</code>): <code>""</code> can be a real element. Absence is not a value. Null array = <code>*-1</code>.</li>
+    </ul>
+
+    <h2>5. Blocking (BLPOP)</h2>
+    <ul>
+      <li>Python primitives sleep in the kernel: <code>Semaphore</code> (counter) · <code>Event</code> (flag; <code>set()</code> wakes <i>all</i>) · <code>Condition</code> (lock + wait queue; <code>notify()</code> wakes one; re-check in <code>while</code>).</li>
+      <li>Design: per-key <code>deque</code> of waiter slots <code>{"event", "value"}</code> under the global lock. Python = the pager, we keep the clipboard.</li>
+      <li><b>FIFO fairness</b>: longest waiter served first → no starvation.</li>
+      <li><b>Hand-off race</b>: waiter wakes, another client LPOPs first. Fix: the <i>pusher</i> pops into the waiter's slot under the lock, then <code>set()</code>.</li>
+      <li>Timeout: <code>wait(t)</code>; re-take lock; value set → take it, else remove own slot (or a pusher hands a value to a ghost).</li>
+    </ul>
+    <div class="why"><b>Why blocking:</b> polling LPOP every 100 ms = wasted round trips + up to 100 ms latency. Blocking = zero idle traffic, instant wake. Timeout = heartbeat for shutdown and health checks.</div>
+
+    <h2>6. Code shape</h2>
+    <ul>
+      <li>Split by layer: <code>main.py</code> (server) · <code>resp.py</code> (protocol) · <code>store.py</code> (data) · <code>commands.py</code> (logic). Mirrors Redis <code>networking.c</code> / <code>t_list.c</code>.</li>
+      <li><b>Dict dispatch</b>: new command = one function + one line (open/closed).</li>
+      <li>Commands return bytes, never touch sockets → testable. <b>Functional core, imperative shell.</b></li>
+      <li>Refactor from a green baseline, so a failure points at the refactor.</li>
+    </ul>
+  </section>
+
+  <section id="quiz" hidden>
+    <div id="score">Score: 0 / 0</div>
+    <div id="questions"></div>
+    <button class="reset" id="reset">Reset quiz</button>
+  </section>
+</main>
+
+<script>
+const QUIZ = [
+  { q: "LPUSH k a b c on an empty key gives…",
+    a: ["[a, b, c]", "[c, b, a]", "[b, c, a]", "Error: LPUSH takes one value"],
+    c: 1, e: "Each value is pushed onto the head in argument order, so the last one ends up first." },
+  { q: "Which pair gives a FIFO job queue?",
+    a: ["LPUSH + LPOP", "RPUSH + RPOP", "RPUSH + LPOP", "LRANGE + LTRIM"],
+    c: 2, e: "Push at one end, pop at the other. Same end = stack (LIFO)." },
+  { q: "LRANGE k 0 -1 on [a, b, c] returns…",
+    a: ["[a, b]", "[a, b, c]", "[]", "[c]"],
+    c: 1, e: "-1 names the last position, and Redis stop is inclusive → whole list." },
+  { q: "Why do negative indexes exist in LRANGE?",
+    a: ["Python compatibility", "To read right-to-left", "'Last N' in one atomic command, without LLEN first", "To save memory"],
+    c: 2, e: "LLEN + LRANGE = two round trips and a race. -N -1 does it in one." },
+  { q: "Why did we switch the list from Python list to deque?",
+    a: ["deque supports slicing", "Pushing at the head of a Python list is O(n)", "deque uses less memory", "Python list isn't thread-safe"],
+    c: 1, e: "A dynamic array shifts every element on insert(0). deque is O(1) at both ends." },
+  { q: "'Append is amortized O(1)' means…",
+    a: ["Every append is O(1)", "Resizes never happen", "Rare resizes are O(n), but averaged over all appends the cost is O(1)", "Appends are O(log n)"],
+    c: 2, e: "Geometric growth spreads the copy cost. A single append can still spike — tail latency." },
+  { q: "LLEN on a missing key replies…",
+    a: [":0", "$-1", "-ERR no such key", "*-1"],
+    c: 0, e: "Redis deletes empty lists, so a missing key IS the empty list. EXISTS answers 'is it there?'." },
+  { q: "Why does LPOP on a missing key return nil, not an empty string?",
+    a: ["Nil is shorter", "An empty string can be a real element; nil means absence", "redis-cli can't show empty strings", "No reason"],
+    c: 1, e: "A worker must tell 'got an empty job' apart from 'queue is empty'." },
+  { q: "threading.Event().set() with three threads waiting wakes…",
+    a: ["One thread", "The oldest thread", "All three", "None until clear()"],
+    c: 2, e: "Event is a flag. Condition.notify() wakes one." },
+  { q: "BLPOP hand-off: why does the pusher pop for the waiter?",
+    a: ["Faster", "Between wake-up and re-taking the lock, another client could LPOP the value", "Event can't wake threads otherwise", "Redis protocol requires it"],
+    c: 1, e: "Popping into the waiter's slot under the lock makes the hand-off atomic and fair." },
+  { q: "A BLPOP waiter times out. Why remove its slot from the waiter queue?",
+    a: ["To free the Event object", "Otherwise a later push hands a value to a client that left → value lost", "Python requires it", "It doesn't matter"],
+    c: 1, e: "Ghost waiters swallow values. Re-check under the lock: value set → take it, else leave the line." },
+  { q: "Why do commands return reply bytes instead of calling sendall?",
+    a: ["Faster sockets", "Logic becomes testable without a network — functional core, imperative shell", "RESP requires it", "To use less memory"],
+    c: 1, e: "I/O stays at the edge (main.py); logic in the middle is pure-ish and unit-testable." },
+];
+
+const box = document.getElementById("questions");
+const scoreEl = document.getElementById("score");
+let answered = 0, right = 0;
+
+function render() {
+  answered = 0; right = 0; box.innerHTML = "";
+  QUIZ.forEach((item, i) => {
+    const div = document.createElement("div");
+    div.className = "q";
+    div.innerHTML = `<p>${i + 1}. ${item.q}</p>` +
+      item.a.map((opt, j) => `<label><input type="radio" name="q${i}" value="${j}">${opt}</label>`).join("") +
+      `<div class="explain">${item.e}</div>`;
+    div.addEventListener("change", (ev) => {
+      if (div.classList.contains("done")) return;
+      const pick = Number(ev.target.value);
+      div.classList.add("done");
+      const labels = div.querySelectorAll("label");
+      labels[item.c].classList.add("right");
+      if (pick !== item.c) labels[pick].classList.add("wrong"); else right++;
+      answered++;
+      div.querySelectorAll("input").forEach(x => x.disabled = true);
+      updateScore();
+    });
+    box.appendChild(div);
+  });
+  updateScore();
+}
+function updateScore() { scoreEl.textContent = `Score: ${right} / ${answered}  ·  ${QUIZ.length} questions`; }
+document.getElementById("reset").onclick = render;
+
+document.querySelectorAll("nav button").forEach(btn => btn.onclick = () => {
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", b === btn));
+  document.getElementById("sheet").hidden = btn.dataset.tab !== "sheet";
+  document.getElementById("quiz").hidden = btn.dataset.tab !== "quiz";
+});
+render();
+</script>
+</body>
+</html>
